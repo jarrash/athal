@@ -10,22 +10,19 @@ export default async function UsersPage() {
   const session = await getSession();
   if (!session) redirect("/login");
   if (session.role !== "systemic_rep") redirect("/app/settings");
-  const handle = db();
+  const sql = await db();
 
-  const tenant = handle
-    .prepare("SELECT name FROM tenants WHERE id = ?")
-    .get(session.tenantId) as { name: string };
+  const [tenant] = (await sql`
+    SELECT name FROM tenants WHERE id = ${session.tenantId}`) as { name: string }[];
 
-  const users = handle
-    .prepare("SELECT * FROM users WHERE tenant_id = ? ORDER BY created_at")
-    .all(session.tenantId) as {
+  const users = (await sql`
+    SELECT * FROM users WHERE tenant_id = ${session.tenantId} ORDER BY created_at`) as {
     id: string; name: string; email: string; role: string; department: string | null;
     status: string; twofa_enabled: number; last_login_at: string | null;
   }[];
 
-  const invitations = handle
-    .prepare("SELECT * FROM invitations WHERE tenant_id = ? ORDER BY created_at DESC")
-    .all(session.tenantId) as {
+  const invitations = (await sql`
+    SELECT * FROM invitations WHERE tenant_id = ${session.tenantId} ORDER BY created_at DESC`) as {
     id: string; name: string; email: string; role: string; status: string; expires_at: string;
   }[];
 

@@ -13,13 +13,11 @@ const COLS = "120px 1.4fr 1.1fr 130px 130px";
 export default async function CasesPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const handle = db();
+  const sql = await db();
 
-  const cases = handle
-    .prepare(
-      "SELECT * FROM cases WHERE tenant_id = ? ORDER BY delivered ASC, court_deadline_at ASC"
-    )
-    .all(session.tenantId) as {
+  const cases = (await sql`
+    SELECT * FROM cases WHERE tenant_id = ${session.tenantId}
+    ORDER BY delivered ASC, court_deadline_at ASC NULLS LAST`) as {
     id: string; case_number: string; title: string; court: string; stage: string;
     court_deadline_at: string | null; delivered: number;
   }[];
@@ -29,14 +27,9 @@ export default async function CasesPage() {
     (c) => c.court_deadline_at && daysUntil(c.court_deadline_at) <= 7 && daysUntil(c.court_deadline_at) >= 0
   );
   const overdue = active.filter((c) => c.court_deadline_at && daysUntil(c.court_deadline_at) < 0);
-  const pendingApprovals = (
-    handle
-      .prepare(
-        `SELECT COUNT(*) AS n FROM obligations o JOIN cases c ON c.id = o.case_id
-         WHERE c.tenant_id = ? AND o.decision = 'suggested'`
-      )
-      .get(session.tenantId) as { n: number }
-  ).n;
+  const [{ n: pendingApprovals }] = await sql`
+    SELECT count(*)::int AS n FROM obligations o JOIN cases c ON c.id = o.case_id
+    WHERE c.tenant_id = ${session.tenantId} AND o.decision = 'suggested'`;
 
   return (
     <main className="fade-up flex flex-col gap-5 p-6">

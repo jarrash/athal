@@ -7,9 +7,9 @@ import { handler, requireSession } from "@/lib/api";
 export const POST = handler(async (req: NextRequest) => {
   const session = await requireSession(req);
   const { challengeId, code, actionLabel } = await req.json();
-  const handle = db();
+  const sql = await db();
 
-  const result = checkChallenge(handle, session, String(challengeId ?? ""), String(code ?? ""));
+  const result = await checkChallenge(sql, session, String(challengeId ?? ""), String(code ?? ""));
   if (!result.ok) {
     const messages: Record<string, string> = {
       expired: "انتهت صلاحية الرمز — افتح تحديًا جديدًا",
@@ -23,6 +23,6 @@ export const POST = handler(async (req: NextRequest) => {
     );
   }
 
-  const token = await issueStepUpToken(handle, session, String(actionLabel ?? ""));
+  const token = await issueStepUpToken(sql, session, String(actionLabel ?? ""));
   return NextResponse.json({ token });
 });

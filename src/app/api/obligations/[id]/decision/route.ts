@@ -14,16 +14,12 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   requireDecisionRole(session);
   const { id } = await ctx.params;
   const { decision } = await req.json();
-  const handle = db();
+  const sql = await db();
 
-  const ob = handle
-    .prepare(
-      `SELECT o.* FROM obligations o JOIN cases c ON c.id = o.case_id
-       WHERE o.id = ? AND c.tenant_id = ?`
-    )
-    .get(id, session.tenantId) as
-    | { id: string; case_id: string; clause: string; confidence: number; decision: string }
-    | undefined;
+  const [ob] = (await sql`
+    SELECT o.* FROM obligations o JOIN cases c ON c.id = o.case_id
+    WHERE o.id = ${id} AND c.tenant_id = ${session.tenantId}`) as
+    { id: string; case_id: string; clause: string; confidence: number; decision: string }[];
   if (!ob) return NextResponse.json({ error: "البند غير موجود" }, { status: 404 });
 
   if (!["approved", "rejected", "suggested"].includes(decision)) {
@@ -31,7 +27,7 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   }
 
   if (decision === "approved") {
-    const stepUp = await consumeStepUpToken(handle, session, req.headers.get("x-step-up-token"));
+    const stepUp = await consumeStepUpToken(sql, session, req.headers.get("x-step-up-token"));
     if (!stepUp) {
       return NextResponse.json(
         { error: "الاعتماد يتطلب مصادقة معززة (OTP) موقّعة من الخادم" },
@@ -41,28 +37,26 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   }
 
   const now = new Date().toISOString();
-  handle
-    .prepare("UPDATE obligations SET decision = ?, decided_by = ?, decided_at = ? WHERE id = ?")
-    .run(
-      decision,
-      decision === "suggested" ? null : session.name,
-      decision === "suggested" ? null : now,
-      ob.id
-    );
+  await sql`
+    UPDATE obligations SET
+      decision = ${decision},
+      decided_by = ${decision === "suggested" ? null : session.name},
+      decided_at = ${decision === "suggested" ? null : now}
+    WHERE id = ${ob.id}`;
 
   const ip = clientIp(req);
   if (decision === "approved") {
-    appendAudit(handle, {
+    await appendAudit(sql, {
       tenantId: session.tenantId, caseId: ob.case_id, kind: "اعتماد ذكاء",
       text: `اعتماد بند: ${ob.clause} (ثقة ${ob.confidence}%)`, actor: `${session.name} — الخبير`, ip,
     });
   } else if (decision === "rejected") {
-    appendAudit(handle, {
+    await appendAudit(sql, {
       tenantId: session.tenantId, caseId: ob.case_id, kind: "رفض ذكاء",
       text: `رفض بند: ${ob.clause}`, actor: `${session.name} — الخبير`, ip,
     });
   } else {
-    appendAudit(handle, {
+    await appendAudit(sql, {
       tenantId: session.tenantId, caseId: ob.case_id, kind: "إدارة",
       text: `تراجع عن قرار سابق في بند: ${ob.clause}`, actor: `${session.name} — الخبير`, ip,
     });

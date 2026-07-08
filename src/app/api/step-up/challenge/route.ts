@@ -7,7 +7,8 @@ import { handler, requireSession } from "@/lib/api";
 export const POST = handler(async (req: NextRequest) => {
   const session = await requireSession(req);
   const { actionLabel } = await req.json();
-  const challenge = createChallenge(db(), session, "step_up", String(actionLabel ?? "إجراء حرج"));
+  const sql = await db();
+  const challenge = await createChallenge(sql, session, "step_up", String(actionLabel ?? "إجراء حرج"));
   return NextResponse.json({
     challengeId: challenge.id,
     expiresAt: challenge.expiresAt,

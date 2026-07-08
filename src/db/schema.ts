@@ -1,4 +1,8 @@
-/** DDL — executed idempotently at database open. */
+/**
+ * Postgres DDL — idempotent. Applied as a Supabase migration in the hosted
+ * project, and also executed by the app's self-heal path / `npm run db:init`
+ * for fresh local databases.
+ */
 export const DDL = `
 CREATE TABLE IF NOT EXISTS tenants (
   id TEXT PRIMARY KEY,
@@ -16,7 +20,7 @@ CREATE TABLE IF NOT EXISTS users (
   department TEXT,
   title TEXT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
-  twofa_enabled INTEGER NOT NULL DEFAULT 1,
+  twofa_enabled SMALLINT NOT NULL DEFAULT 1,
   license_no TEXT,
   consultant_expires_at TEXT,
   last_login_at TEXT,
@@ -45,7 +49,7 @@ CREATE TABLE IF NOT EXISTS cases (
   stage TEXT NOT NULL,
   assigned_expert_id TEXT REFERENCES users(id),
   court_deadline_at TEXT,
-  delivered INTEGER NOT NULL DEFAULT 0,
+  delivered SMALLINT NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 
@@ -56,7 +60,7 @@ CREATE TABLE IF NOT EXISTS parties (
   role TEXT NOT NULL,
   note TEXT,
   confidence INTEGER,
-  approved INTEGER NOT NULL DEFAULT 0
+  approved SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS evidence (
@@ -66,7 +70,7 @@ CREATE TABLE IF NOT EXISTS evidence (
   ref TEXT NOT NULL,
   title TEXT NOT NULL,
   filename TEXT NOT NULL,
-  size INTEGER NOT NULL DEFAULT 0,
+  size BIGINT NOT NULL DEFAULT 0,
   sha256 TEXT NOT NULL,
   status TEXT NOT NULL CHECK (status IN ('documented','analyzing','disputed','quarantined')),
   scan_status TEXT NOT NULL DEFAULT 'clean' CHECK (scan_status IN ('pending','clean','infected')),
@@ -75,9 +79,14 @@ CREATE TABLE IF NOT EXISTS evidence (
   uploaded_at TEXT NOT NULL
 );
 
--- Append-only, hash-chained per evidence item (WORM chain of custody)
+CREATE TABLE IF NOT EXISTS evidence_blobs (
+  sha256 TEXT PRIMARY KEY,
+  quarantined SMALLINT NOT NULL DEFAULT 0,
+  bytes BYTEA NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS custody_events (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   evidence_id TEXT NOT NULL REFERENCES evidence(id),
   action TEXT NOT NULL,
   actor TEXT NOT NULL,
@@ -115,9 +124,8 @@ CREATE TABLE IF NOT EXISTS conclusions (
   approved_at TEXT
 );
 
--- Append-only, hash-chained audit log (case actions + tenant admin actions)
 CREATE TABLE IF NOT EXISTS audit_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   case_id TEXT,
   kind TEXT NOT NULL,
@@ -129,7 +137,6 @@ CREATE TABLE IF NOT EXISTS audit_log (
   event_hash TEXT NOT NULL
 );
 
--- OTP challenges: login second factor + step-up signatures for critical actions
 CREATE TABLE IF NOT EXISTS challenges (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -142,10 +149,9 @@ CREATE TABLE IF NOT EXISTS challenges (
   created_at TEXT NOT NULL
 );
 
--- Single-use registry for issued step-up tokens
 CREATE TABLE IF NOT EXISTS step_up_tokens (
   jti TEXT PRIMARY KEY,
-  used INTEGER NOT NULL DEFAULT 0
+  used SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS ai_providers (
@@ -153,9 +159,15 @@ CREATE TABLE IF NOT EXISTS ai_providers (
   provider TEXT NOT NULL,
   label TEXT NOT NULL,
   model TEXT NOT NULL,
-  enabled INTEGER NOT NULL DEFAULT 0,
-  locked INTEGER NOT NULL DEFAULT 0,
+  enabled SMALLINT NOT NULL DEFAULT 0,
+  locked SMALLINT NOT NULL DEFAULT 0,
   scope TEXT NOT NULL DEFAULT 'workspace',
   PRIMARY KEY (tenant_id, provider)
 );
+
+CREATE INDEX IF NOT EXISTS idx_evidence_case ON evidence(case_id);
+CREATE INDEX IF NOT EXISTS idx_custody_evidence ON custody_events(evidence_id);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant ON audit_log(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_obligations_case ON obligations(case_id);
+CREATE INDEX IF NOT EXISTS idx_conclusions_case ON conclusions(case_id);
 `;

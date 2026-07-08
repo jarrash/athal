@@ -15,29 +15,27 @@ export default async function ReportPrintPage({ params }: { params: Promise<{ id
   const session = await getSession();
   if (!session) redirect("/login");
   const { id } = await params;
-  const handle = db();
+  const sql = await db();
 
-  const kase = handle
-    .prepare("SELECT * FROM cases WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as
-    | { id: string; case_number: string; title: string; court: string }
-    | undefined;
+  const [kase] = (await sql`
+    SELECT * FROM cases WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as
+    { id: string; case_number: string; title: string; court: string }[];
   if (!kase) notFound();
 
-  const conclusions = handle
-    .prepare("SELECT * FROM conclusions WHERE case_id = ? ORDER BY number ASC")
-    .all(kase.id) as {
+  const conclusions = (await sql`
+    SELECT * FROM conclusions WHERE case_id = ${kase.id} ORDER BY number ASC`) as {
     number: string; section_label: string; section_title: string; text: string;
     status: string; citations: string; approved_by: string | null;
   }[];
 
-  const evidence = handle
-    .prepare("SELECT ref, title, filename, sha256, uploaded_at FROM evidence WHERE case_id = ? AND status != 'quarantined' ORDER BY ref")
-    .all(kase.id) as { ref: string; title: string; filename: string; sha256: string; uploaded_at: string }[];
+  const evidence = (await sql`
+    SELECT ref, title, filename, sha256, uploaded_at FROM evidence
+    WHERE case_id = ${kase.id} AND status != 'quarantined' ORDER BY ref`) as
+    { ref: string; title: string; filename: string; sha256: string; uploaded_at: string }[];
 
-  const log = handle
-    .prepare("SELECT kind, text, actor, at FROM audit_log WHERE case_id = ? ORDER BY id ASC")
-    .all(kase.id) as { kind: string; text: string; actor: string; at: string }[];
+  const log = (await sql`
+    SELECT kind, text, actor, at FROM audit_log WHERE case_id = ${kase.id} ORDER BY id ASC`) as
+    { kind: string; text: string; actor: string; at: string }[];
 
   const citedRefs = new Set(conclusions.flatMap((c) => JSON.parse(c.citations) as string[]));
 

@@ -9,16 +9,14 @@ export default async function UploadPage({ params }: { params: Promise<{ id: str
   const session = await getSession();
   if (!session) redirect("/login");
   const { id } = await params;
-  const handle = db();
+  const sql = await db();
 
-  const kase = handle
-    .prepare("SELECT id FROM cases WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as { id: string } | undefined;
+  const [kase] = (await sql`
+    SELECT id FROM cases WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as { id: string }[];
   if (!kase) notFound();
 
-  const parties = handle
-    .prepare("SELECT name, role FROM parties WHERE case_id = ?")
-    .all(kase.id) as { name: string; role: string }[];
+  const parties = (await sql`
+    SELECT name, role FROM parties WHERE case_id = ${kase.id}`) as { name: string; role: string }[];
   const partyOptions = [
     ...parties.map((p) => p.role),
     "مشترك",

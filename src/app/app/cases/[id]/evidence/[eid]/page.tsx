@@ -17,26 +17,23 @@ export default async function EvidenceDetailPage({
   const session = await getSession();
   if (!session) redirect("/login");
   const { id, eid } = await params;
-  const handle = db();
+  const sql = await db();
 
-  const ev = handle
-    .prepare("SELECT * FROM evidence WHERE id = ? AND case_id = ? AND tenant_id = ?")
-    .get(eid, id, session.tenantId) as
-    | {
-        id: string; ref: string; title: string; filename: string; size: number; sha256: string;
-        status: string; party_label: string | null; uploaded_by: string; uploaded_at: string;
-      }
-    | undefined;
+  const [ev] = (await sql`
+    SELECT * FROM evidence WHERE id = ${eid} AND case_id = ${id} AND tenant_id = ${session.tenantId}`) as {
+    id: string; ref: string; title: string; filename: string; size: number; sha256: string;
+    status: string; party_label: string | null; uploaded_by: string; uploaded_at: string;
+  }[];
   if (!ev) notFound();
 
-  const chain = handle
-    .prepare("SELECT action, actor, at, event_hash FROM custody_events WHERE evidence_id = ? ORDER BY id DESC")
-    .all(ev.id) as { action: string; actor: string; at: string; event_hash: string }[];
+  const chain = (await sql`
+    SELECT action, actor, at, event_hash FROM custody_events WHERE evidence_id = ${ev.id} ORDER BY id DESC`) as
+    { action: string; actor: string; at: string; event_hash: string }[];
 
   const linked = (
-    handle
-      .prepare("SELECT number, text, status, citations FROM conclusions WHERE case_id = ?")
-      .all(id) as { number: string; text: string; status: string; citations: string }[]
+    (await sql`
+      SELECT number, text, status, citations FROM conclusions WHERE case_id = ${id}`) as
+      { number: string; text: string; status: string; citations: string }[]
   ).filter((c) => (JSON.parse(c.citations) as string[]).includes(ev.ref));
 
   return (
@@ -75,7 +72,7 @@ export default async function EvidenceDetailPage({
               <span className="text-t3">المودِع: <span className="font-semibold text-t1">{ev.uploaded_by}</span></span>
               <span className="text-t3">الطرف: <span className="font-semibold text-t1">{ev.party_label ?? "—"}</span></span>
               <span className="text-t3">تاريخ الإيداع: <Mono className="text-[10px] font-semibold text-t1">{fmtDateTime(ev.uploaded_at)}</Mono></span>
-              <span className="text-t3">الحجم: <Mono className="text-[10px] font-semibold text-t1">{(ev.size / 1024).toFixed(0)} KB</Mono></span>
+              <span className="text-t3">الحجم: <Mono className="text-[10px] font-semibold text-t1">{(Number(ev.size) / 1024).toFixed(0)} KB</Mono></span>
             </div>
           </Card>
 

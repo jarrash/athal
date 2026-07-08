@@ -12,12 +12,10 @@ import { handler } from "@/lib/api";
  */
 export const POST = handler(async (req: NextRequest) => {
   const { email, password } = await req.json();
-  const handle = db();
-  const user = handle
-    .prepare("SELECT * FROM users WHERE email = ? AND status = 'active'")
-    .get(String(email ?? "").trim().toLowerCase()) as
-    | { id: string; tenant_id: string; name: string; role: string; license_no: string | null; password_hash: string }
-    | undefined;
+  const sql = await db();
+  const [user] = (await sql`
+    SELECT * FROM users WHERE email = ${String(email ?? "").trim().toLowerCase()} AND status = 'active'`) as
+    { id: string; tenant_id: string; name: string; role: string; license_no: string | null; password_hash: string }[];
 
   if (!user || !verifyPassword(String(password ?? ""), user.password_hash)) {
     return NextResponse.json(
@@ -33,7 +31,7 @@ export const POST = handler(async (req: NextRequest) => {
     role: user.role,
     licenseNo: user.license_no,
   };
-  const challenge = createChallenge(handle, session, "login", "تسجيل الدخول إلى مساحة العمل");
+  const challenge = await createChallenge(sql, session, "login", "تسجيل الدخول إلى مساحة العمل");
   return NextResponse.json({
     challengeId: challenge.id,
     expiresAt: challenge.expiresAt,

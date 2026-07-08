@@ -9,23 +9,23 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
   const session = await getSession();
   if (!session) redirect("/login");
   const { id } = await params;
-  const handle = db();
+  const sql = await db();
 
-  const kase = handle
-    .prepare("SELECT id FROM cases WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as { id: string } | undefined;
+  const [kase] = (await sql`
+    SELECT id FROM cases WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as { id: string }[];
   if (!kase) notFound();
 
-  const rows = handle
-    .prepare("SELECT * FROM evidence WHERE case_id = ? ORDER BY uploaded_at DESC")
-    .all(kase.id) as {
+  const rows = (await sql`
+    SELECT * FROM evidence WHERE case_id = ${kase.id} ORDER BY uploaded_at DESC`) as {
     id: string; ref: string; title: string; filename: string; sha256: string;
     status: string; party_label: string | null;
   }[];
 
-  const chainStmt = handle.prepare(
-    "SELECT action, actor, at FROM custody_events WHERE evidence_id = ? ORDER BY id DESC"
-  );
+  const chains = (await sql`
+    SELECT evidence_id, action, actor, at FROM custody_events
+    WHERE evidence_id IN ${sql(rows.length ? rows.map((r) => r.id) : [""])}
+    ORDER BY id DESC`) as { evidence_id: string; action: string; actor: string; at: string }[];
+
   const evidence: EvidenceRow[] = rows.map((r) => ({
     id: r.id,
     ref: r.ref,
@@ -34,7 +34,9 @@ export default async function VaultPage({ params }: { params: Promise<{ id: stri
     sha256: r.sha256,
     status: r.status,
     party: r.party_label ?? "—",
-    chain: chainStmt.all(r.id) as { action: string; actor: string; at: string }[],
+    chain: chains
+      .filter((c) => c.evidence_id === r.id)
+      .map(({ action, actor, at }) => ({ action, actor, at })),
   }));
 
   return <VaultView caseId={kase.id} evidence={evidence} />;

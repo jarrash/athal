@@ -12,7 +12,7 @@ export const POST = handler(async (req: NextRequest) => {
   const session = await requireSession(req);
   requireAdmin(session);
   const { name, email, role, department, consultantExpiresAt } = await req.json();
-  const handle = db();
+  const sql = await db();
 
   if (!name || !email || !ROLE_LABEL[String(role)]) {
     return NextResponse.json({ error: "الاسم والبريد والدور مطلوبة" }, { status: 400 });
@@ -26,14 +26,12 @@ export const POST = handler(async (req: NextRequest) => {
 
   const id = randomUUID();
   const expiresAt = new Date(Date.now() + INVITE_TTL_HOURS * 3_600_000).toISOString();
-  handle
-    .prepare(
-      `INSERT INTO invitations (id, tenant_id, name, email, role, department, status, expires_at, created_by, created_at)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`
-    )
-    .run(id, session.tenantId, String(name), String(email), String(role), department ? String(department) : null, "pending", expiresAt, session.userId, new Date().toISOString());
+  await sql`
+    INSERT INTO invitations (id, tenant_id, name, email, role, department, status, expires_at, created_by, created_at)
+    VALUES (${id}, ${session.tenantId}, ${String(name)}, ${String(email)}, ${String(role)},
+      ${department ? String(department) : null}, 'pending', ${expiresAt}, ${session.userId}, ${new Date().toISOString()})`;
 
-  appendAudit(handle, {
+  await appendAudit(sql, {
     tenantId: session.tenantId,
     kind: "إدارة",
     text: `دعوة عضو جديد: ${name} (${email}) — الدور: ${ROLE_LABEL[String(role)]} — تنتهي الدعوة خلال ${INVITE_TTL_HOURS} ساعة`,

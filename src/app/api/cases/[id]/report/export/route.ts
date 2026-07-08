@@ -15,17 +15,17 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   requireDecisionRole(session);
   const { id } = await ctx.params;
   const { format } = await req.json().catch(() => ({ format: "PDF" }));
-  const handle = db();
+  const sql = await db();
 
-  const kase = handle
-    .prepare("SELECT * FROM cases WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as { id: string; case_number: string } | undefined;
+  const [kase] = (await sql`
+    SELECT * FROM cases WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as
+    { id: string; case_number: string }[];
   if (!kase) return NextResponse.json({ error: "القضية غير موجودة" }, { status: 404 });
 
   // 1) Citation gate — hard server-side check, not a UI affordance.
-  const uncited = handle
-    .prepare("SELECT number FROM conclusions WHERE case_id = ? AND citations = '[]'")
-    .all(kase.id) as { number: string }[];
+  const uncited = (await sql`
+    SELECT number FROM conclusions WHERE case_id = ${kase.id} AND citations = '[]'`) as
+    { number: string }[];
   if (uncited.length > 0) {
     return NextResponse.json(
       {
@@ -37,7 +37,7 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   }
 
   // 2) Step-up signature — verified and consumed server-side.
-  const stepUp = await consumeStepUpToken(handle, session, req.headers.get("x-step-up-token"));
+  const stepUp = await consumeStepUpToken(sql, session, req.headers.get("x-step-up-token"));
   if (!stepUp) {
     return NextResponse.json(
       { error: "التصدير يتطلب مصادقة معززة (OTP) موقّعة من الخادم" },
@@ -45,7 +45,7 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
     );
   }
 
-  appendAudit(handle, {
+  await appendAudit(sql, {
     tenantId: session.tenantId,
     caseId: kase.id,
     kind: "تصدير",

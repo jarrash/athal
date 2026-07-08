@@ -14,15 +14,14 @@ const COLS = "150px 110px 1.6fr 180px";
 export default async function LogPage() {
   const session = await getSession();
   if (!session) redirect("/login");
-  const handle = db();
+  const sql = await db();
 
-  const entries = handle
-    .prepare("SELECT * FROM audit_log WHERE tenant_id = ? ORDER BY id DESC LIMIT 200")
-    .all(session.tenantId) as {
+  const entries = (await sql`
+    SELECT * FROM audit_log WHERE tenant_id = ${session.tenantId} ORDER BY id DESC LIMIT 200`) as {
     id: number; kind: string; text: string; actor: string; at: string;
   }[];
 
-  const chainOk = verifyAuditChain(handle, session.tenantId);
+  const chainOk = await verifyAuditChain(sql, session.tenantId);
   const freshCutoff = Date.now() - 15 * 60_000;
 
   return (

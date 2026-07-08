@@ -13,24 +13,18 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
   requireAdmin(session);
   const { id } = await ctx.params;
   const { action } = await req.json();
-  const handle = db();
+  const sql = await db();
 
-  const user = handle
-    .prepare("SELECT * FROM users WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as
-    | { id: string; name: string; role: string; status: string }
-    | undefined;
+  const [user] = (await sql`
+    SELECT * FROM users WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as
+    { id: string; name: string; role: string; status: string }[];
   if (!user) return NextResponse.json({ error: "المستخدم غير موجود" }, { status: 404 });
 
   if (action === "suspend") {
     if (user.role === "systemic_rep") {
-      const activeReps = (
-        handle
-          .prepare(
-            "SELECT COUNT(*) AS n FROM users WHERE tenant_id = ? AND role = 'systemic_rep' AND status = 'active'"
-          )
-          .get(session.tenantId) as { n: number }
-      ).n;
+      const [{ n: activeReps }] = await sql`
+        SELECT count(*)::int AS n FROM users
+        WHERE tenant_id = ${session.tenantId} AND role = 'systemic_rep' AND status = 'active'`;
       if (activeReps <= 1) {
         return NextResponse.json(
           { error: "لا يمكن إيقاف الممثل النظامي الوحيد — يجب بقاء ممثل نظامي نشط واحد على الأقل" },
@@ -38,15 +32,15 @@ export const POST = handler(async (req: NextRequest, ctx: { params: Promise<{ id
         );
       }
     }
-    handle.prepare("UPDATE users SET status = 'suspended' WHERE id = ?").run(user.id);
+    await sql`UPDATE users SET status = 'suspended' WHERE id = ${user.id}`;
   } else if (action === "reactivate") {
     // Reactivation restores the prior role/scope exactly (we never mutated them).
-    handle.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(user.id);
+    await sql`UPDATE users SET status = 'active' WHERE id = ${user.id}`;
   } else {
     return NextResponse.json({ error: "إجراء غير صالح" }, { status: 400 });
   }
 
-  appendAudit(handle, {
+  await appendAudit(sql, {
     tenantId: session.tenantId,
     kind: "إدارة",
     text: `${action === "suspend" ? "إيقاف وصول" : "إعادة تفعيل"} العضو ${user.name} — الحالة: ${user.status} ← ${action === "suspend" ? "suspended" : "active"}`,

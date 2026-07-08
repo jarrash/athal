@@ -9,28 +9,24 @@ export default async function CopilotPage({ params }: { params: Promise<{ id: st
   const session = await getSession();
   if (!session) redirect("/login");
   const { id } = await params;
-  const handle = db();
+  const sql = await db();
 
-  const kase = handle
-    .prepare("SELECT id FROM cases WHERE id = ? AND tenant_id = ?")
-    .get(id, session.tenantId) as { id: string } | undefined;
+  const [kase] = (await sql`
+    SELECT id FROM cases WHERE id = ${id} AND tenant_id = ${session.tenantId}`) as { id: string }[];
   if (!kase) notFound();
 
-  const parties = handle
-    .prepare("SELECT * FROM parties WHERE case_id = ?")
-    .all(kase.id) as PartyRow[];
+  const parties = (await sql`
+    SELECT * FROM parties WHERE case_id = ${kase.id}`) as PartyRow[];
 
-  const rows = handle
-    .prepare("SELECT * FROM obligations WHERE case_id = ? ORDER BY confidence DESC")
-    .all(kase.id) as {
+  const rows = (await sql`
+    SELECT * FROM obligations WHERE case_id = ${kase.id} ORDER BY confidence DESC`) as {
     id: string; clause: string; responsible: string; status: string;
     evidence_refs: string; confidence: number; decision: string;
     decided_by: string | null; decided_at: string | null;
   }[];
 
-  const evidenceByRef = handle
-    .prepare("SELECT ref, id FROM evidence WHERE case_id = ?")
-    .all(kase.id) as { ref: string; id: string }[];
+  const evidenceByRef = (await sql`
+    SELECT ref, id FROM evidence WHERE case_id = ${kase.id}`) as { ref: string; id: string }[];
   const refMap = Object.fromEntries(evidenceByRef.map((e) => [e.ref, e.id]));
 
   const obligations: ObligationRow[] = rows.map((r) => ({

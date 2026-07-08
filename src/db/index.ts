@@ -1,27 +1,50 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "fs";
-import path from "path";
+import postgres, { type Sql } from "postgres";
 import { DDL } from "./schema";
 import { seedIfEmpty } from "./seed";
 
-const DATA_DIR = process.env.ATHAL_DATA_DIR ?? path.join(process.cwd(), ".data");
-export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
-
 declare global {
   // eslint-disable-next-line no-var
-  var __athalDb: Database.Database | undefined;
+  var __athalSql: Sql | undefined;
+  // eslint-disable-next-line no-var
+  var __athalReady: Promise<void> | undefined;
 }
 
-/** Singleton SQLite handle (survives Next.js dev hot-reload via globalThis). */
-export function db(): Database.Database {
-  if (!globalThis.__athalDb) {
-    mkdirSync(UPLOADS_DIR, { recursive: true });
-    const handle = new Database(path.join(DATA_DIR, "athal.db"));
-    handle.pragma("journal_mode = WAL");
-    handle.pragma("foreign_keys = ON");
-    handle.exec(DDL);
-    seedIfEmpty(handle);
-    globalThis.__athalDb = handle;
+function client(): Sql {
+  if (!globalThis.__athalSql) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error("DATABASE_URL is not set");
+    globalThis.__athalSql = postgres(url, {
+      // Supabase transaction-mode pooler (port 6543) does not support
+      // named prepared statements.
+      prepare: false,
+      ssl: "require",
+      max: 4,
+      idle_timeout: 20,
+      connect_timeout: 15,
+    });
   }
-  return globalThis.__athalDb;
+  return globalThis.__athalSql;
+}
+
+/**
+ * Postgres handle. On first use per process it self-heals the schema
+ * (idempotent DDL) and seeds the demo data if the database is empty.
+ */
+export async function db(): Promise<Sql> {
+  const sql = client();
+  if (!globalThis.__athalReady) {
+    globalThis.__athalReady = (async () => {
+      try {
+        await sql`SELECT 1 FROM users LIMIT 1`;
+      } catch {
+        await sql.unsafe(DDL);
+      }
+      await seedIfEmpty(sql);
+    })().catch((err) => {
+      globalThis.__athalReady = undefined;
+      throw err;
+    });
+  }
+  await globalThis.__athalReady;
+  return sql;
 }

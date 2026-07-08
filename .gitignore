@@ -15,7 +15,12 @@
 .DS_Store
 *.pem
 npm-debug.log*
+
+# secrets — never commit connection strings (public repo)
+.env
 .env*.local
+vercel.json
+.vercel/
 
 # typescript
 *.tsbuildinfo

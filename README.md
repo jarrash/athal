@@ -10,7 +10,7 @@ Built from the design handoff in `Khibrah_AI_Workspace.zip` (high-fidelity HTML 
 
 - **Next.js 15** (App Router) + React 19 + TypeScript
 - **Tailwind CSS v4** with the design-token palette (ink `#132C2C` / paper `#F5F5E5` / gold `#C8A84B`, 2px radii, hard offset shadows)
-- **SQLite** (better-sqlite3) — auto-creates schema and seeds demo data on first run
+- **Postgres (Supabase)** via [`postgres`](https://github.com/porsager/postgres) — the app self-heals the schema (idempotent DDL) and seeds demo data on first start if the database is empty. Evidence bytes are stored in a `bytea` table for now (swap to Supabase Storage for large files).
 - **jose** (JWT) for sessions and single-use step-up tokens
 - Fonts: IBM Plex Sans Arabic + IBM Plex Mono (mono fields render LTR even inside RTL prose)
 
@@ -18,9 +18,13 @@ Built from the design handoff in `Khibrah_AI_Workspace.zip` (high-fidelity HTML 
 
 ```bash
 npm install
+echo 'DATABASE_URL=postgres://user:pass@host:6543/postgres' > .env.local
+echo 'ATHAL_SECRET=<random-string>' >> .env.local
 npm run dev        # http://localhost:3000
-npm run db:reset   # wipe the local demo database (re-seeds on next start)
+npm run db:reset   # drop all tables (schema + seed recreated on next start)
 ```
+
+Use Supabase's **transaction-mode pooler** connection string (port 6543) for serverless deploys; the client is configured with `prepare: false` accordingly. Never commit `.env.local` or `vercel.json` — this repo is public.
 
 **Demo accounts** (password for all: `Athal!Demo1447`):
 
@@ -67,8 +71,6 @@ src/
   lib/                  # sessions, step-up service, hash-chain audit, status maps, formatting
 middleware.ts           # /app/** requires a session
 ```
-
-The demo database and uploaded evidence blobs live in `.data/` (gitignored).
 
 ## Screenshots
 
