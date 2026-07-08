@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+/*
+  نظام أثال البصري — "حبر / ورق / ذهب"
+  Athal design tokens: ink / paper / gold ledger aesthetic.
+  Sharp 2px radii, hard offset shadows, dense professional type.
+*/
+@theme {
+  --font-sans: "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Core brand */
+  --color-ink: #132c2c;
+  --color-ink-hover: #0a483b;
+  --color-ink-border: #1a5a4a;
+  --color-gold: #c8a84b;
+  --color-gold-hover: #d4b85f;
+
+  /* Backgrounds */
+  --color-paper: #f5f5e5;
+  --color-paper-alt: #eaeada;
+  --color-line: #e4e0d4;
+  --color-divider: #ebebda;
+  --color-chip: #ebebda;
+  --color-chip-border: #ddd9cb;
+  --color-muted: #b3ad9e;
+
+  /* Text */
+  --color-t1: #132c2c;
+  --color-t2: #514c40;
+  --color-t3: #6e6857;
+  --color-t3d: #6e6a5e;
+  --color-t4: #8b8574;
+  --color-body: #2a2e38;
+  --color-navtext: #a9a392;
+
+  /* Status trios */
+  --color-ok: #2e7d5b;
+  --color-ok-bg: #eaf3ee;
+  --color-ok-border: #c8dfd3;
+  --color-warn: #8a6d3b;
+  --color-warn-deep: #6b5426;
+  --color-warn-bg: #f3ead3;
+  --color-warn-border: #e2d3ac;
+  --color-danger: #a4423c;
+  --color-danger-bg: #f7ecea;
+  --color-danger-border: #e4c7c2;
+  --color-info: #3a5a7e;
+  --color-info-bg: #eaf0f6;
+  --color-info-border: #cbd9e6;
+
+  /* Highlight rows */
+  --color-fresh: #fbf9f0;
+  --color-fresh-alt: #fafaec;
+
+  --radius-sharp: 2px;
+
+  --shadow-card: 4px 4px 0 rgba(0, 0, 0, 0.09);
+  --shadow-panel: 6px 6px 0 rgba(0, 0, 0, 0.18);
+  --shadow-modal: 8px 8px 0 rgba(0, 0, 0, 0.3);
+  --shadow-btn: 3px 3px 0 rgba(0, 0, 0, 0.12);
+  --shadow-btn-sm: 2px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+html {
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-t1);
+}
+
+/* Monospace data fields stay LTR even inside RTL prose */
+.mono-ltr {
+  font-family: var(--font-mono);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Faint gold grid used on dark ink surfaces (sidebar, hero, sign-in) */
+.ink-grid {
+  background-color: var(--color-ink);
+  background-image:
+    linear-gradient(rgba(200, 168, 75, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 168, 75, 0.05) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Gold inset top rule used on table headers */
+.gold-toprule {
+  box-shadow: inset 0 2px 0 var(--color-gold);
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fadeUp 0.25s ease;
+}
+
+/* Skeleton loading shimmer (no spinners, per design) */
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.skeleton {
+  background: var(--color-divider);
+  border-radius: 2px;
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
